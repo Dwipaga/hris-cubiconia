@@ -1,0 +1,24 @@
+1.1.0 - 7/11/2013
+--------------------------
+
+ * Added in maxSelect feature.  You can now limit how many items an user can select.
+
+
+1.0.2 - 6/27/2013
+--------------------------
+
+ * Fixed issue #1: https://github.com/keyo321/jQueryLightWeightMultiSelect/issues/1
+
+
+1.0.1 - 4/19/2013
+--------------------------
+
+ * added missing plugin name to the click events
+ * minor updates on comments
+
+
+
+1.0 - 2/10/2013
+--------------------------
+
+ * initial release
