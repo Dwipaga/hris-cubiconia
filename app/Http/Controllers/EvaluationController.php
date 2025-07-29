@@ -18,38 +18,35 @@ class EvaluationController extends Controller
         $userId = Auth::user()->user_id;
         $userDivisi = Auth::user()->divisi;
         $currentMonth = Carbon::now()->startOfMonth();
-    
+
         // Simplified query based on your objective: group 2&3 assess group 4, group 4 views own results
         if ($userGroupId == 2) {
             // Group 2 assesses all users in group 4
             $asesiUsers = User::select('user_id', 'firstname', 'group_id', 'divisi')
                 ->where('group_id', 4)
                 ->get();
-                
         } elseif ($userGroupId == 3) {
             // Group 3 assesses users in group 4 with same division
             $asesiUsers = User::select('user_id', 'firstname', 'group_id', 'divisi')
                 ->where('group_id', 4)
                 ->where('divisi', $userDivisi)
                 ->get();
-                
         } elseif ($userGroupId == 4) {
             // Group 4 can only view their own evaluation results
             $asesiUsers = User::select('user_id', 'firstname', 'group_id', 'divisi')
                 ->where('user_id', $userId)
                 ->get();
-                
         } else {
             // Fallback for other groups - use penilaian relationships
             $asesiGroupIds = Penilaian::where('asesor_id', $userGroupId)
                 ->where('is_active', true)
                 ->pluck('asesi_id');
-                
+
             $asesiUsers = User::select('user_id', 'firstname', 'group_id', 'divisi')
                 ->whereIn('group_id', $asesiGroupIds)
                 ->get();
         }
-    
+
         // Early return if no users found
         if ($asesiUsers->isEmpty()) {
             return view('evaluations.index', [
@@ -58,7 +55,7 @@ class EvaluationController extends Controller
                 'evaluationResults' => collect(),
             ]);
         }
-    
+
         // Get all evaluations in single query with eager loading
         // For group 4, we need to get evaluations WHERE they are the asesi (being evaluated)
         // For other groups, we get evaluations WHERE they are the penilai (doing the evaluation)
@@ -70,7 +67,7 @@ class EvaluationController extends Controller
                 $query->select('user_id', 'firstname');
             }
         ]);
-    
+
         if ($userGroupId == 4) {
             // For group 4, get evaluations where they are being evaluated (asesi)
             $evaluationResults = $evaluationQuery
@@ -105,13 +102,13 @@ class EvaluationController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get();
         }
-    
+
         // Mark users who have evaluations using collection method (no additional queries)
         $evaluatedUserIds = $evaluationResults->pluck('asesi_ternilai_id');
         $asesiUsers->each(function ($user) use ($evaluatedUserIds) {
             $user->has_evaluation = $evaluatedUserIds->contains($user->user_id);
         });
-    
+
         // Set group names efficiently without additional queries
         $asesiUsers->each(function ($user) use ($userGroupId) {
             if ($userGroupId == 3 || $userGroupId == 4) {
@@ -121,10 +118,10 @@ class EvaluationController extends Controller
                 $user->group_name = $user->divisi ?? 'N/A'; // or get from cache/config
             }
         });
-    
+
         // Create empty penilaians collection since it's not actually used in the logic
         $penilaians = collect();
-    
+
         return view('evaluations.index', compact(
             'penilaians',
             'asesiUsers',
@@ -215,6 +212,60 @@ class EvaluationController extends Controller
             ->with('success', 'Evaluation submitted successfully');
     }
 
+    // Add this method to your EvaluationController
+
+    public function viewPdf($asesi_id)
+    {
+        $asesi = User::where('user_id', $asesi_id)->first();
+        $penilai = Auth::user();
+        $currentMonth = Carbon::now()->startOfMonth();
+
+        $evaluation = Evaluation::where('asesi_ternilai_id', $asesi->user_id);
+
+        if (Auth::user()->group_id == 2 || Auth::user()->group_id == 3) {
+            $evaluation = $evaluation->where('penilai_id', $penilai->user_id);
+        }
+
+        $evaluation = $evaluation->where('bulan_penilaian', $currentMonth)->first();
+
+        if (!$evaluation) {
+            abort(404, 'Evaluation not found');
+        }
+
+        // Fetch group name for division
+        $group = \App\Models\Group::where('group_id', $asesi->group_id)->first();
+        $group_name = $group ? $group->group_name : 'N/A';
+
+        // Fetch penilaian details for PDF
+        $penilaianDetails = collect($evaluation->detail_penilaian)->map(function ($detail) {
+            $penilaian = Penilaian::find($detail['penilaian_id']);
+            return [
+                'penilaian' => $penilaian ? $penilaian->penilaian : 'Unknown',
+                'bobot' => $penilaian ? $penilaian->bobot : 0,
+                'score' => $detail['hasil']
+            ];
+        });
+
+        $data = [
+            'asesi_name' => $asesi->firstname,
+            'month' => $currentMonth->format('F Y'),
+            'total_score' => $evaluation->total_akhir,
+            'details' => $penilaianDetails,
+            'group_name' => $group_name,
+            'logo_path' => public_path('assets/img/cubiconia.png'),
+            'company_name' => 'PT. CUBICONIA KANAYA PRATAMA',
+            'address' => 'Signature Park Grande CTB/L1/03, MT Haryono St No.Kav. 20, Cawang, Jakarta 16360',
+            'phone' => 'Phone: 0822-2118-8192',
+            'email' => 'Email: hello@cubiconia.com',
+            'title' => 'LEMBAR HASIL EVALUASI KINERJA KARYAWAN'
+        ];
+
+        $pdf = Pdf::loadView('evaluations.pdf', $data);
+
+        // Return PDF for inline viewing instead of download
+        return $pdf->stream('Evaluation_' . $asesi->firstname . '_' . $currentMonth->format('Y_m') . '.pdf');
+    }
+
     public function showEvaluation($asesi_id)
     {
         $asesi = User::where('user_id', $asesi_id)->first();
@@ -260,8 +311,8 @@ class EvaluationController extends Controller
         if (Auth::user()->group_id == 2 || Auth::user()->group_id == 3) {
 
             $evaluation = $evaluation->where('penilai_id', $penilai->user_id);
-        } 
-            $evaluation = $evaluation->where('bulan_penilaian', $currentMonth)
+        }
+        $evaluation = $evaluation->where('bulan_penilaian', $currentMonth)
             ->first();
 
         if (!$evaluation) {

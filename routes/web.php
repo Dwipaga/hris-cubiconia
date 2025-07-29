@@ -121,6 +121,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{asesi_id}/store', [EvaluationController::class, 'store'])->name('store');
         Route::get('/{asesi_id}/show', [EvaluationController::class, 'showEvaluation'])->name('show');
         Route::get('/{asesi_id}/export-pdf', [EvaluationController::class, 'exportPdf'])->name('exportPdf');
+        Route::get('/view-pdf/{asesi_id}', [EvaluationController::class, 'viewPdf'])->name('viewPdf');
     });
     Route::get('/hr-approval', [HrApprovalController::class, 'index'])->name('hr-approval.index');
     Route::get('/hr-approval/{id}', [HrApprovalController::class, 'edit'])->name('hr-approval.edit');

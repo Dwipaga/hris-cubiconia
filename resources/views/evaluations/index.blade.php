@@ -63,10 +63,15 @@
                                     <td>{{ $user->firstname }}</td>
                                     <td>
                                         @if($user->has_evaluation)
-                                            
+                                            <button class="btn btn-primary btn-sm view-pdf-evaluation" data-asesi-id="{{ $user->user_id }}" data-toggle="modal" data-target="#pdfViewModal">
+                                                <i class="fas fa-eye"></i> View PDF
+                                            </button>
                                             <a href="{{ route('evaluations.exportPdf', ['asesi_id' => $user->user_id]) }}" class="btn btn-success btn-sm">
-                                                <i class="fas fa-file-pdf"></i> Export PDF
+                                                <i class="fas fa-download"></i> Download PDF
                                             </a>
+                                            <button class="btn btn-info btn-sm view-evaluation" data-asesi-id="{{ $user->user_id }}" data-toggle="modal" data-target="#evaluationModal">
+                                                <i class="fas fa-list"></i> View Details
+                                            </button>
                                         @else
                                             <a href="{{ route('evaluations.create', ['asesi_id' => $user->user_id]) }}" class="btn btn-primary btn-sm">
                                                 <i class="fas fa-plus"></i> Evaluate
@@ -100,7 +105,7 @@
                                         <th width="15%">Group</th>
                                         <th width="12%">Total Score</th>
                                         <th width="12%">Date</th>
-                                        <th width="12%">Action</th>
+                                        <th width="24%">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -119,8 +124,11 @@
                                         </td>
                                         <td>{{ $result->created_at->format('d M Y') }}</td>
                                         <td>
+                                            <button class="btn btn-sm btn-primary view-pdf-evaluation" data-asesi-id="{{ $result->asesi_ternilai_id }}" data-toggle="modal" data-target="#pdfViewModal">
+                                                <i class="fas fa-eye"></i> View PDF
+                                            </button>
                                             <a href="{{ route('evaluations.exportPdf', ['asesi_id' => $result->asesi_ternilai_id]) }}" class="btn btn-sm btn-success">
-                                                <i class="fas fa-download"></i> PDF
+                                                <i class="fas fa-download"></i> Download
                                             </a>
                                         </td>
                                     </tr>
@@ -135,6 +143,54 @@
                             <p class="text-muted">Complete some evaluations to see results here.</p>
                         </div>
                     @endif
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF View Modal (New) -->
+    <div class="modal fade" id="pdfViewModal" tabindex="-1" role="dialog" aria-labelledby="pdfViewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document" style="max-width: 90%; width: 90%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pdfViewModalLabel">
+                        <i class="fas fa-file-pdf text-danger"></i> Evaluation PDF Preview
+                    </h5>
+                    <div class="modal-header-actions">
+                        <button type="button" class="btn btn-success btn-sm" id="downloadPdfBtn">
+                            <i class="fas fa-download"></i> Download PDF
+                        </button>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">×</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="pdfLoadingSpinner" class="text-center p-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Loading PDF...</span>
+                        </div>
+                        <p class="mt-2">Loading PDF preview...</p>
+                    </div>
+                    <iframe id="pdfIframe" src="" width="100%" height="600" frameborder="0" style="display: none;">
+                        <p>Your browser does not support PDF preview. 
+                           <a href="" id="pdfFallbackLink" target="_blank">Click here to download the PDF</a>
+                        </p>
+                    </iframe>
+                    <div id="pdfErrorMessage" style="display: none;" class="alert alert-warning m-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>PDF Preview Not Available</strong><br>
+                        Your browser doesn't support PDF preview or the PDF couldn't be loaded.
+                        <br><br>
+                        <a href="" id="pdfErrorDownloadLink" class="btn btn-primary" target="_blank">
+                            <i class="fas fa-download"></i> Download PDF Instead
+                        </a>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                        <i class="fas fa-times"></i> Close
+                    </button>
                 </div>
             </div>
         </div>
@@ -173,7 +229,7 @@
         </div>
     </div>
 
-    <!-- Result Detail Modal (new) -->
+    <!-- Result Detail Modal (existing) -->
     <div class="modal fade" id="resultDetailModal" tabindex="-1" role="dialog" aria-labelledby="resultDetailModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
@@ -250,6 +306,62 @@
             },
         });
 
+        // Handle View PDF Evaluation button click (NEW)
+        $('.view-pdf-evaluation').on('click', function() {
+            var asesiId = $(this).data('asesi-id');
+            var pdfUrl = '{{ route("evaluations.viewPdf", ":asesi_id") }}'.replace(':asesi_id', asesiId);
+            var downloadUrl = '{{ route("evaluations.exportPdf", ":asesi_id") }}'.replace(':asesi_id', asesiId);
+            
+            // Reset modal state
+            $('#pdfLoadingSpinner').show();
+            $('#pdfIframe').hide();
+            $('#pdfErrorMessage').hide();
+            
+            // Set download button URL
+            $('#downloadPdfBtn').attr('data-download-url', downloadUrl);
+            
+            // Set iframe source
+            $('#pdfIframe').attr('src', pdfUrl);
+            $('#pdfFallbackLink').attr('href', downloadUrl);
+            $('#pdfErrorDownloadLink').attr('href', downloadUrl);
+            
+            // Handle iframe load
+            $('#pdfIframe').on('load', function() {
+                $('#pdfLoadingSpinner').hide();
+                $('#pdfIframe').show();
+            });
+            
+            // Handle iframe error
+            $('#pdfIframe').on('error', function() {
+                $('#pdfLoadingSpinner').hide();
+                $('#pdfErrorMessage').show();
+            });
+            
+            // Timeout for loading
+            setTimeout(function() {
+                if ($('#pdfLoadingSpinner').is(':visible')) {
+                    $('#pdfLoadingSpinner').hide();
+                    $('#pdfErrorMessage').show();
+                }
+            }, 10000); // 10 second timeout
+        });
+
+        // Handle download PDF button in modal
+        $('#downloadPdfBtn').on('click', function() {
+            var downloadUrl = $(this).attr('data-download-url');
+            if (downloadUrl) {
+                window.open(downloadUrl, '_blank');
+            }
+        });
+
+        // Clean up iframe when modal is closed
+        $('#pdfViewModal').on('hidden.bs.modal', function() {
+            $('#pdfIframe').attr('src', '');
+            $('#pdfLoadingSpinner').show();
+            $('#pdfIframe').hide();
+            $('#pdfErrorMessage').hide();
+        });
+
         // Handle View Evaluation button click (existing)
         $('.view-evaluation').on('click', function() {
             var asesiId = $(this).data('asesi-id');
@@ -281,7 +393,7 @@
             });
         });
 
-        // Handle View Result Detail button click (new)
+        // Handle View Result Detail button click (existing)
         $('.view-result-detail').on('click', function() {
             var evaluationId = $(this).data('evaluation-id');
             
@@ -389,6 +501,52 @@
     }
     .badge {
         font-size: 0.75em;
+    }
+    
+    /* PDF Modal Styles */
+    .modal-xl {
+        max-width: 90%;
+        width: 90%;
+    }
+    
+    .modal-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    #pdfIframe {
+        min-height: 600px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+    }
+    
+    #pdfLoadingSpinner {
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    @media (max-width: 768px) {
+        .modal-xl {
+            max-width: 95%;
+            width: 95%;
+        }
+        
+        #pdfIframe {
+            min-height: 400px;
+        }
+        
+        .modal-header-actions {
+            flex-direction: column;
+            gap: 5px;
+        }
     }
 </style>
 @endpush
